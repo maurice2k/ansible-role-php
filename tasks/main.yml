@@ -1,0 +1,67 @@
+---
+- name: Add PHP signing key
+  get_url:
+    url: https://packages.sury.org/php/apt.gpg
+    dest: /etc/apt/trusted.gpg.d/php.gpg
+
+- name: Add PHP repository for Debian {{ ansible_distribution_release }}
+  copy:
+    content: 'deb [signed-by=/etc/apt/trusted.gpg.d/php.gpg] https://packages.sury.org/php/ {{ ansible_distribution_release }} main'
+    dest: /etc/apt/sources.list.d/php.list
+
+- name: Check for FPM pool.d files
+  set_fact:
+    php_fpm_poold_files_list: "{{ php_fpm_poold_files | map('fileglob') | sum(start=[]) | list }}"
+
+- name: Compiling list of PHP extensions
+  set_fact:
+    php_extensions_combined: "{{ ( php_extensions + php_default_extensions + (['dev'] if php_pecl_extensions else []) + (['fpm'] if php_fpm_poold_files_list else []) ) |select() | map('regex_replace', '^', 'php' ~ php_version ~ '-') }}"
+
+- name: Install PHP and extensions ({{ php_extensions_combined |join(' ') }})
+  apt:
+    name: "{{ php_extensions_combined }}"
+    update_cache: yes
+    state: present
+  notify: "Restart PHP-FPM service"
+
+- name: Install additional PECL extensions
+  command: pecl install "{{ item }}"
+  loop: "{{ php_pecl_extensions }}"
+  when: php_pecl_extensions is defined and php_pecl_extensions != ""
+
+- name: Copy PHP-CLI configuration files
+  template:
+    src: "{{ item }}"
+    dest: "/etc/php/{{ php_version }}/cli/conf.d/{{ item | basename | regex_replace('(.j2)$', '') }}"
+  with_fileglob:
+    - "{{ role_path }}/files/cli/conf.d/*"
+    - "{{ php_cli_confd_files }}"
+
+- block:
+  - name: Copy PHP-FPM configuration files
+    template:
+      src: "{{ item }}"
+      dest: "/etc/php/{{ php_version }}/fpm/conf.d/{{ item | basename | regex_replace('(.j2)$', '') }}"
+    with_fileglob:
+      - "{{ role_path }}/files/fpm/conf.d/*"
+      - "{{ php_fpm_confd_files }}"
+    notify: "Restart PHP-FPM service"
+
+  - name: Copy PHP-FPM pool configuration files
+    template:
+      src: "{{ item }}"
+      dest: "/etc/php/{{ php_version }}/fpm/pool.d/{{ item | basename | regex_replace('(.j2)$', '') }}"
+    with_fileglob:
+      - "{{ php_fpm_poold_files }}"
+    notify: "Restart PHP-FPM service"
+
+  - name: Ensure /var/log/php directory exists
+    ansible.builtin.file:
+      path: /var/log/php
+      state: directory
+      owner: root
+      group: root
+      mode: '0755'
+
+  when: php_fpm_poold_files_list |length > 0
+

@@ -1,0 +1,28 @@
+---
+php_version: "8.3"
+php_default_extensions:
+  - cli
+  - common
+  - curl
+  - http
+  - intl
+  - mbstring
+  - mysql
+  - opcache
+  - raphf
+  - xml
+  - zip
+
+php_extensions: []
+php_pecl_extensions: []
+
+# PHP-CLI configuration directories.
+## Files from php_cli_confd_files will be copied to /etc/php/{{ php_version }}/cli/conf.d/
+php_cli_confd_files: "{{ playbook_dir }}/files/php/cli/conf.d/*"
+
+# PHP-FPM configuration directories.
+## Files from php_fpm_confd_files will be copied to /etc/php/{{ php_version }}/fpm/conf.d/
+php_fpm_confd_files: "{{ playbook_dir }}/files/php/fpm/conf.d/*"
+
+## Files from php_fpm_poold_files will be copied to /etc/php/{{ php_version }}/fpm/pool.d/
+php_fpm_poold_files: "{{ playbook_dir }}/files/php/fpm/pool.d/*"
